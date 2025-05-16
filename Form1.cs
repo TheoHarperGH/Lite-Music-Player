@@ -1,4 +1,6 @@
-﻿using CSCore;
+﻿using DiscordRPC;
+using DiscordRPC.Logging;
+using CSCore;
 using CSCore.Codecs;
 using CSCore.DSP;
 using CSCore.SoundOut;
@@ -13,24 +15,51 @@ namespace MusicPlayerTH
 {
     public partial class Form1 : Form
     {
-        //Declaring Stuff blah blah
         
-        int currentIndex;
+        //
+        //
+        //
+        
+        //
+        // VARIABLES
+        //
 
+        int currentIndex;
         private ISoundOut soundOut;
         private IWaveSource waveSource;
-        
-        // Playlist of file paths
         private List<string> playlist = new List<string>();
-
         private FftProvider fftProvider;
         private System.Windows.Forms.Timer visualizerTimer;
         private const int fftSize = 1024;
-        private float[] previousHeights = new float[64]; // match barCount
+        private float[] previousHeights = new float[128];
+        private float progress = 0f; // from 0.0 to 1.0
+        private DiscordRpcClient client;
 
+        //
+        //
+        //
 
+        //
+        // DISCORD RPC
+        //
 
-        //This Section has visualiser stuff, have no idea what half it does lmao
+        private void InitializeDiscordRPC()
+        {
+            client = new DiscordRpcClient("1373016902925946972");
+
+            client.Logger = new ConsoleLogger() { Level = LogLevel.Warning };
+
+            client.Initialize();
+        }
+
+        //
+        //
+        //
+
+        //
+        // VISUALIZER
+        //
+
         private void InitVisualizer(IWaveSource source)
         {
             fftProvider = new FftProvider(source.WaveFormat.Channels, FftSize.Fft1024);
@@ -46,13 +75,14 @@ namespace MusicPlayerTH
             waveSource = notificationSource.ToWaveSource();
 
             visualizerTimer = new System.Windows.Forms.Timer();
-            visualizerTimer.Interval = 16; 
+            visualizerTimer.Interval = 16;
             visualizerTimer.Tick += VisualizerTimer_Tick;
             visualizerTimer.Start();
         }
 
-
-
+        //
+        //
+        //
 
         private void VisualizerTimer_Tick(object sender, EventArgs e)
         {
@@ -63,12 +93,13 @@ namespace MusicPlayerTH
             }
         }
 
-
-
+        //
+        //
+        //
 
         private void DrawSpectrum(float[] fftBuffer)
         {
-            int barCount = 64;
+            int barCount = 128;
             Bitmap bmp = new Bitmap(pictureBoxSpectrum.Width, pictureBoxSpectrum.Height);
 
             using (Graphics g = Graphics.FromImage(bmp))
@@ -102,31 +133,20 @@ namespace MusicPlayerTH
                     }
 
                     float magnitude = (count > 0) ? sum / count : 0;
-
-                    // --- Frequency weighting ---
-                    // Calculate normalized position (0 = bass, 1 = treble)
                     float freqPos = i / (float)(barCount - 1);
 
-                    // Bass reduction factor: lower freqPos means bigger reduction
-                    float bassReduction = 1f - (float)Math.Pow(1f - freqPos, 2.5); // curve that drops bass strength
-                                                                                   // Treble boost factor: raise higher frequencies slightly
+                    float bassReduction = 1f - (float)Math.Pow(1f - freqPos, 2.5); 
                     float trebleBoost = 0.5f + 0.5f * freqPos;
 
-                    // Combine weighting
                     float weightedMag = magnitude * bassReduction * trebleBoost;
 
-                    // Non-linear scaling for smoother dynamics (exponent <1 compresses)
                     float scaledMag = (float)Math.Pow(weightedMag, 0.6);
-
-                    // Clamp final magnitude so it doesn't explode visually
                     float mag = Math.Min(scaledMag * 10f, 1.0f);
 
-                    // Calculate bar height with smoothing
                     int targetHeight = (int)(mag * height);
                     int smoothedHeight = (targetHeight + (int)previousHeights[i] * 3) / 4;
                     previousHeights[i] = smoothedHeight;
 
-                    // New: blue gradient (dark blue low, bright cyan high)
                     int blue = 255;
                     int green = (int)(255 * (smoothedHeight / (float)height));
                     int red = 0;
@@ -144,8 +164,9 @@ namespace MusicPlayerTH
             pictureBoxSpectrum.Image = bmp;
         }
 
-
-
+        //
+        //
+        //
 
         private void UpdateVisualizerState()
         {
@@ -154,46 +175,60 @@ namespace MusicPlayerTH
 
             if (soundOut.PlaybackState == PlaybackState.Playing)
             {
-                // Resume visualizer updates
                 if (!visualizerTimer.Enabled)
                     visualizerTimer.Start();
             }
             else
             {
-                // Pause or stop visualizer updates
                 if (visualizerTimer.Enabled)
                     visualizerTimer.Stop();
 
-                // Clear the visualizer display so it doesn't freeze
                 if (pictureBoxSpectrum.Image != null)
                 {
                     pictureBoxSpectrum.Image.Dispose();
                     pictureBoxSpectrum.Image = null;
                 }
+
+                pictureBoxSpectrum.Invalidate();
+                pictureBoxSpectrum.Update();
             }
         }
 
+        //
+        //
+        //
+
+        //
+        // CONSTRUCTOR AND FORM LOAD
+        //
 
 
-        //Okay main program stuff starts here
         public Form1()
         {
             InitializeComponent();
+
+            TrackBarVolume.TickStyle = TickStyle.None;       
+            TrackBarVolume.BackColor = Color.FromArgb(0, 0, 0);  
         }
 
         private void Form1_Load(object sender, EventArgs e)
         {
-
+            InitializeDiscordRPC();
         }
 
-        //Importing Files, wanna add VORBIS support later, mp3 outdated imo
-        //i wanna rant about it but it is what it is
+        //
+        // 
+        //
+
+        //
+        // BUTTON INTERACTIONS
+        //
 
         private void btnOpen_Click(object sender, EventArgs e)
         {
             using OpenFileDialog ofd = new OpenFileDialog();
             ofd.Filter = "Audio Files|*.mp3;*.wav;*.flac";
-            ofd.Multiselect = true;  
+            ofd.Multiselect = true;
 
 
 
@@ -207,9 +242,9 @@ namespace MusicPlayerTH
             }
         }
 
-        //Pause play button, self explanatory
-        //Man this looks so bad, i should really clean this up later
-
+        //
+        //
+        //
 
         private void btnPlayPause_Click(object sender, EventArgs e)
         {
@@ -242,66 +277,9 @@ namespace MusicPlayerTH
             UpdateVisualizerState();
         }
 
-
-        //Stop button, little broken will fix later (wont) but it does what it needs to for now
-
-        private void listBoxPlaylist_SelectedIndexChanged(object sender, EventArgs e)
-        {
-            int selectedIndex = listBoxPlaylist.SelectedIndex;
-            if (selectedIndex >= 0 && selectedIndex < playlist.Count)
-            {
-                PlayTrack(selectedIndex);
-            }
-        }
-
-
-        //This handles actual playing of a track
-        //I need to study CsCore more to understand what this does lmao
-
-
-        private void PlayTrack(int index)
-        {
-            if (soundOut != null)
-            {
-                soundOut.Stopped -= SoundOut_Stopped; // Unhook old event
-                soundOut.Stop();
-                soundOut.Dispose();
-            }
-
-            waveSource?.Dispose();
-
-            currentIndex = index;
-
-            var baseSource = CodecFactory.Instance.GetCodec(playlist[index]);
-            InitVisualizer(baseSource);
-            soundOut = new WasapiOut();
-            soundOut.Initialize(waveSource);
-
-            soundOut.Volume = TrackBarVolume.Value / 100f;
-
-
-            soundOut.Stopped += SoundOut_Stopped;
-
-            soundOut.Play();
-            listBoxPlaylist.SelectedIndex = index;
-            timerProgress.Start();
-
-        }
-
-       
-        //Just making sure things don't break, which they still do.
-        
-        
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        {
-            soundOut?.Stop();
-            soundOut?.Dispose();
-            waveSource?.Dispose();
-            base.OnFormClosing(e);
-        }
-
-
-        //This is the stop button, it stops playback and clears the playlist
+        //
+        //
+        //
 
         private void btnStop_Click(object sender, EventArgs e)
         {
@@ -317,17 +295,20 @@ namespace MusicPlayerTH
             if (waveSource != null)
             {
                 waveSource.Dispose();
-                waveSource = null;     
-            }  
+                waveSource = null;
+            }
 
             playlist.Clear();
             listBoxPlaylist.Items.Clear();
 
 
             listBoxPlaylist.SelectedIndex = -1;
-            timerProgress.Stop();
-            progressBarTrack.Value = 0;
         }
+
+        //
+        //
+        //
+
 
         private void btnExport_Click(object sender, EventArgs e)
         {
@@ -348,6 +329,10 @@ namespace MusicPlayerTH
                 MessageBox.Show("Playlist exported successfully!");
             }
         }
+
+        //
+        //
+        //
 
         private void btnImport_Click(object sender, EventArgs e)
         {
@@ -375,15 +360,91 @@ namespace MusicPlayerTH
             }
         }
 
+        //
+        //
+        //
+
         private void btnAbout_Click(object sender, EventArgs e)
         {
             Form2 aboutForm = new Form2();
             aboutForm.ShowDialog(this);
         }
 
+        //
+        //
+        //
 
-        //Ooo this was tempermantal, ahd to shovein a try catch, if you didnt manually stop playback and close the program it would throw an error, but i think its fixed now
+        //
+        // PLAYBACK / PLAYLIST HANDLING
+        //
+        private void PlayTrack(int index)
+        {
+            if (soundOut != null)
+            {
+                soundOut.Stopped -= SoundOut_Stopped;
+                soundOut.Stop();
+                soundOut.Dispose();
+            }
 
+            waveSource?.Dispose();
+
+            currentIndex = index;
+
+            var baseSource = CodecFactory.Instance.GetCodec(playlist[index]);
+            InitVisualizer(baseSource);
+            soundOut = new WasapiOut();
+            soundOut.Initialize(waveSource);
+
+            soundOut.Volume = TrackBarVolume.Value / 100f;
+
+
+            soundOut.Stopped += SoundOut_Stopped;
+
+            soundOut.Play();
+            listBoxPlaylist.SelectedIndex = index;
+
+            client.SetPresence(new RichPresence()
+            {
+                Details = $"Listening to",
+                State = Path.GetFileNameWithoutExtension(playlist[index]),
+                Assets = new Assets()
+                {
+                    LargeImageKey = "logo",
+                    LargeImageText = "Yummy"
+                }
+            });
+
+
+        }
+
+        //
+        //
+        //
+
+        private void listBoxPlaylist_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            int selectedIndex = listBoxPlaylist.SelectedIndex;
+            if (selectedIndex >= 0 && selectedIndex < playlist.Count)
+            {
+                PlayTrack(selectedIndex);
+            }
+        }
+
+        //
+        //
+        //
+
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            soundOut?.Stop();
+            soundOut?.Dispose();
+            waveSource?.Dispose();
+            base.OnFormClosing(e);
+        }
+
+        //
+        //
+        //
 
         private void SoundOut_Stopped(object sender, PlaybackStoppedEventArgs e)
         {
@@ -402,19 +463,20 @@ namespace MusicPlayerTH
                         else
                         {
                             currentIndex = -1;
+                            UpdateVisualizerState();
                         }
                     }));
                 }
                 catch (ObjectDisposedException)
                 {
-                    
+
                 }
             }
         }
 
-
-        //Volume control, simple slider, nothing fancy
-
+        //
+        //
+        //
 
         private void TrackBarVolume_Scroll(object sender, EventArgs e)
         {
@@ -424,23 +486,64 @@ namespace MusicPlayerTH
             }
         }
 
-
-
-        //Progress bar for the track, im gonna replace looks ugly, uses like the windows 7 style progress bar
-
-        private void timerProgress_Tick(object sender, EventArgs e)
+        private void btnPlayDemo_Click(object sender, EventArgs e)
         {
-            if (waveSource != null && waveSource.Length > 0)
+            string demoPath = Path.Combine(Application.StartupPath, "Alive.Wav");
+
+            if (!File.Exists(demoPath))
             {
-                double progress = (double)waveSource.Position / waveSource.Length;
-                progressBarTrack.Value = (int)(progress * progressBarTrack.Maximum);
-            }
-            else
-            {
-                progressBarTrack.Value = 0;
+                MessageBox.Show("Demo track not found!");
+                return;
             }
 
+            if (!playlist.Contains(demoPath))
+            {
+                playlist.Add(demoPath);
+                listBoxPlaylist.Items.Add(Path.GetFileName(demoPath));
+            }
+
+            int demoIndex = playlist.IndexOf(demoPath);
+            listBoxPlaylist.SelectedIndex = demoIndex;
+
+            PlayTrack(demoIndex);
+        }
+
+        private void listBoxPlaylist_MouseDown_1(object sender, MouseEventArgs e)
+        {
+            if (e.Button == MouseButtons.Right)
+            {
+                int index = listBoxPlaylist.IndexFromPoint(e.Location);
+                if (index != ListBox.NoMatches)
+                {
+                    if (index >= 0 && index < playlist.Count)
+                    {
+                        playlist.RemoveAt(index);
+                        listBoxPlaylist.Items.RemoveAt(index);
+
+                        if (currentIndex == index)
+                        {
+                            soundOut?.Stop();
+                            soundOut?.Dispose();
+                            soundOut = null;
+
+                            waveSource?.Dispose();
+                            waveSource = null;
+
+                            pictureBoxSpectrum.Image?.Dispose();
+                            pictureBoxSpectrum.Image = null;
+                        }
+
+                        if (index < currentIndex)
+                        {
+                            currentIndex--;
+                        }
+                        else if (index == currentIndex)
+                        {
+                            currentIndex = -1;
+                        }
+                    }
+                }
+            }
         }
     }
-
 }

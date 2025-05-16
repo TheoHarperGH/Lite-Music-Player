@@ -28,18 +28,30 @@
         /// </summary>
         private void InitializeComponent()
         {
+            System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(Form2));
             lblCredits = new Label();
+            pictureBox1 = new PictureBox();
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).BeginInit();
             SuspendLayout();
             // 
             // lblCredits
             // 
-            lblCredits.Font = new Font("Bahnschrift", 27.75F, FontStyle.Bold, GraphicsUnit.Point, 0);
+            lblCredits.Font = new Font("Bahnschrift Light", 27.75F, FontStyle.Regular, GraphicsUnit.Point, 0);
             lblCredits.ForeColor = Color.White;
             lblCredits.Location = new Point(0, 9);
             lblCredits.Name = "lblCredits";
-            lblCredits.Size = new Size(383, 351);
+            lblCredits.Size = new Size(383, 91);
             lblCredits.TabIndex = 0;
-            lblCredits.Text = "Lite Music Player v1.0 By Theo Harper";
+            lblCredits.Text = "Lite Music Player DEV By Theo Harper";
+            // 
+            // pictureBox1
+            // 
+            pictureBox1.Image = (Image)resources.GetObject("pictureBox1.Image");
+            pictureBox1.Location = new Point(0, 121);
+            pictureBox1.Name = "pictureBox1";
+            pictureBox1.Size = new Size(383, 245);
+            pictureBox1.TabIndex = 1;
+            pictureBox1.TabStop = false;
             // 
             // Form2
             // 
@@ -47,15 +59,18 @@
             AutoScaleMode = AutoScaleMode.Font;
             BackColor = SystemColors.ActiveCaptionText;
             ClientSize = new Size(384, 361);
+            Controls.Add(pictureBox1);
             Controls.Add(lblCredits);
             FormBorderStyle = FormBorderStyle.FixedToolWindow;
             Name = "Form2";
             Text = "About Lite Music Player";
+            ((System.ComponentModel.ISupportInitialize)pictureBox1).EndInit();
             ResumeLayout(false);
         }
 
         #endregion
 
         private Label lblCredits;
+        private PictureBox pictureBox1;
     }
 }
